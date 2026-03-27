@@ -6,12 +6,8 @@
 #   C:\spark\spark-3.5.7-bin-hadoop3\bin\spark-submit ^
 #     --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.7,org.elasticsearch:elasticsearch-spark-30_2.12:8.11.4 ^
 #     spark_streaming.py
-#
-# Math:
-#   VWAP (Volume-Weighted Average Price) = Σ(price × quantity) / Σ(quantity)
-#   Z-Score = (current_vwap - rolling_mean) / rolling_std
-#   Anomaly flagged when |Z-Score| > threshold (default 2.0)
 
+import os
 import signal
 import sys
 from pyspark.sql import SparkSession
@@ -28,7 +24,8 @@ KAFKA_TOPIC = "crypto_trades"
 ES_HOST = "localhost"
 ES_PORT = "9200"
 ES_INDEX = "streamsight-trades"
-CHECKPOINT_DIR = "C:/Users/niou2/Documents/streamsight/checkpoints"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CHECKPOINT_DIR = os.path.join(BASE_DIR, "checkpoints")
 
 WINDOW_DURATION = "10 seconds"
 WATERMARK_DELAY = "5 seconds"
@@ -152,13 +149,14 @@ console_query = (
     .outputMode("append")
     .format("console")
     .option("truncate", "false")
-    .option("checkpointLocation", f"{CHECKPOINT_DIR}/console")
+    .option("checkpointLocation", os.path.join(CHECKPOINT_DIR, "console"))
     .trigger(processingTime="10 seconds")
     .start()
 )
 
 def write_to_elasticsearch(batch_df, batch_id):
-    if batch_df.count() == 0:
+    batch_count = batch_df.count()
+    if batch_count == 0:
         return
 
     try:
@@ -175,7 +173,7 @@ def write_to_elasticsearch(batch_df, batch_id):
             .mode("append")
             .save()
         )
-        print(f"[STREAMSIGHT] Batch {batch_id}: Wrote {batch_df.count()} records to Elasticsearch")
+        print(f"[STREAMSIGHT] Batch {batch_id}: Wrote {batch_count} records to Elasticsearch")
     except Exception as e:
         print(f"[STREAMSIGHT] Batch {batch_id}: ES write failed - {e}")
 
@@ -184,7 +182,7 @@ es_query = (
     .writeStream
     .outputMode("append")
     .foreachBatch(write_to_elasticsearch)
-    .option("checkpointLocation", f"{CHECKPOINT_DIR}/elasticsearch")
+    .option("checkpointLocation", os.path.join(CHECKPOINT_DIR, "elasticsearch"))
     .trigger(processingTime="10 seconds")
     .start()
 )

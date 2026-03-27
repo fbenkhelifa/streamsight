@@ -82,7 +82,7 @@ spark-submit `
 - **Kibana:** http://localhost:5601
 - **ES document count:** `curl http://localhost:9200/streamsight-trades/_count`
 
-> First results appear after ~3-5 minutes (window duration + watermark delay + Spark JIT warm-up).
+> With current defaults (`10s` window + `5s` watermark), first results typically appear after ~15–30 seconds.
 
 ## Project Structure
 
@@ -125,10 +125,10 @@ docker compose down
 | Problem | Solution |
 |---------|----------|
 | Spark crashes with "getSubject is not supported" | Set `$env:JAVA_HOME` to Java 17 (not 18+) |
-| Kafka container exits after `docker compose up` | `docker compose restart zookeeper; sleep 10; docker compose restart kafka` |
-| No data in Elasticsearch | Ensure both producer and Spark are running; wait 3-5 min for first batch |
+| Kafka container exits after `docker compose up` | `docker compose restart zookeeper; Start-Sleep -Seconds 10; docker compose restart kafka` |
+| No data in Elasticsearch | Ensure both producer and Spark are running; wait for the first closed window |
 | Spark checkpoint errors on restart | Delete `checkpoints/` folder and restart |
 
 ## License
 
-This project was built as a university coursework demonstration.
+This project is licensed under the MIT License. See the `LICENSE` file for details.
