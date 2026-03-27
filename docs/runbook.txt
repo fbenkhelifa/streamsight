@@ -1,0 +1,13 @@
+STREAMSIGHT quick runbook
+
+1) docker compose up -d
+2) ./create_es_index.ps1
+3) start producer: python binance_to_kafka.py
+4) start spark: spark-submit ... spark_streaming.py
+5) open Kibana: http://localhost:5601
+6) verify ES count: /streamsight-trades/_count
+
+Stop:
+- Ctrl+C Spark
+- Ctrl+C producer
+- docker compose down
