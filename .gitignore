@@ -1,9 +1,14 @@
 # Python
 venv/
+.venv/
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.egg-info/
+
+# Environment files
+.env
+.env.*
+!.env.example
 
 # Spark
 checkpoints/
@@ -11,6 +16,11 @@ checkpoints/
 metastore_db/
 derby.log
 spark-warehouse/
+
+# Build artifacts
+dist/
+build/
+*.whl
 
 # IDE / Editor
 .vscode/
