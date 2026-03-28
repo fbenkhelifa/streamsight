@@ -1,68 +1,69 @@
-# STREAMSIGHT
+# STREAMSIGHT — Real-Time Crypto Anomaly Detection Pipeline
 
-Real-time cryptocurrency market anomaly detection platform using Apache Spark Structured Streaming.
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat&logo=python&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-active-success)
+![CI](https://github.com/fbenkhelifa/streamsight/actions/workflows/ci.yml/badge.svg)
 
-## Architecture
+## What is this
 
+STREAMSIGHT is a real-time market analytics pipeline that ingests live BTC/USDT trades and detects anomalies using windowed VWAP + Z-score logic. It exists to demonstrate production-style data engineering across streaming ingestion, transformation, and observability layers.
+
+## Why it exists
+
+Most notebook-based projects stop at offline analysis; this project demonstrates end-to-end operational behavior: real-time ingestion from Binance, stream processing with Spark, indexed outputs in Elasticsearch, and monitoring in Kibana.
+
+## Architecture / Stack
+
+```mermaid
+flowchart LR
+    A[Binance WebSocket] --> B[Python Producer\nbinance_to_kafka.py]
+    B --> C[Apache Kafka\ncrypto_trades topic]
+    C --> D[Spark Structured Streaming\nspark_streaming.py]
+    D --> E[Elasticsearch\nstreamsight-trades]
+    E --> F[Kibana Dashboard]
 ```
-Binance WebSocket ──▶ Python Producer ──▶ Apache Kafka ──▶ Spark Streaming ──▶ Elasticsearch ──▶ Kibana
-   (live trades)     (binance_to_kafka.py)  (crypto_trades)  (spark_streaming.py)  (streamsight-trades)    (dashboards)
+
+**Core stack:** Python, Kafka, Spark Structured Streaming, Elasticsearch, Kibana, Docker Compose.
+
+## Installation
+
+### 1) Clone repository
+
+```powershell
+git clone https://github.com/fbenkhelifa/streamsight.git
+cd streamsight
 ```
 
-**How it works:** Live BTC/USDT trades are ingested from Binance via WebSocket, published to Kafka, then processed by Spark in tumbling time windows. Each window computes VWAP (Volume-Weighted Average Price) and a Z-score for anomaly detection. Results are written to Elasticsearch and visualized in Kibana.
+### 2) Create Python environment and install dependencies
 
-## Prerequisites
-
-| Tool | Version | Notes |
-|------|---------|-------|
-| Docker Desktop | Latest | Runs Kafka, Zookeeper, Elasticsearch, Kibana |
-| Python | 3.10+ | With pip / venv |
-| Apache Spark | 3.5.7 | Pre-built for Hadoop 3 |
-| Java | 17 (Eclipse Temurin) | Spark 3.5 does **not** work with Java 18+ |
-| Hadoop winutils | 3.3.x | `winutils.exe` + `hadoop.dll` in `C:\hadoop\bin` (Windows only) |
-
-## Quick Start
-
-### 1. Install Python dependencies
-
-```bash
+```powershell
 python -m venv venv
-.\venv\Scripts\Activate.ps1   # Windows PowerShell
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2. Start infrastructure
+### 3) Start infrastructure
 
 ```powershell
 docker compose up -d
-```
-
-Wait ~30-60 seconds for services to be healthy, then verify:
-
-```powershell
 docker compose ps
 ```
 
-### 3. Create Elasticsearch index
+### 4) Create Elasticsearch index mapping
 
 ```powershell
 .\create_es_index.ps1
 ```
 
-### 4. Clear old checkpoints (if restarting)
-
-```powershell
-Remove-Item -Recurse -Force checkpoints -ErrorAction SilentlyContinue
-```
-
-### 5. Start the Binance producer (Terminal 1)
+### 5) Start producer (terminal 1)
 
 ```powershell
 .\venv\Scripts\Activate.ps1
 python binance_to_kafka.py
 ```
 
-### 6. Start Spark streaming (Terminal 2)
+### 6) Start Spark streaming (terminal 2)
 
 ```powershell
 $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot"
@@ -77,58 +78,72 @@ spark-submit `
   spark_streaming.py
 ```
 
-### 7. View results
+### 7) Open dashboard
 
-- **Kibana:** http://localhost:5601
-- **ES document count:** `curl http://localhost:9200/streamsight-trades/_count`
+- Kibana: `http://localhost:5601`
+- Elasticsearch count check: `http://localhost:9200/streamsight-trades/_count`
 
-> With current defaults (`10s` window + `5s` watermark), first results typically appear after ~15–30 seconds.
+## Usage
 
-## Project Structure
+### Input (example trade from stream)
 
+```json
+{"symbol":"BTCUSDT","price":64200.10,"quantity":0.015,"event_time":1711581000000}
 ```
+
+### Output (windowed analytics record)
+
+```json
+{
+  "symbol":"BTCUSDT",
+  "window_start":"2026-03-28T12:00:00Z",
+  "window_end":"2026-03-28T12:00:10Z",
+  "total_volume":2.341,
+  "trade_count":125,
+  "vwap":64197.83,
+  "zscore":2.34,
+  "is_anomaly":true,
+  "anomaly_type":"HIGH_VWAP"
+}
+```
+
+## Project structure
+
+```text
 streamsight/
-├── binance_to_kafka.py      # Binance WebSocket → Kafka producer
-├── spark_streaming.py       # Spark Structured Streaming (VWAP + Z-score)
-├── setup_kibana.py          # Kibana data view/dashboard setup helper
-├── create_es_index.ps1      # Elasticsearch index mapping setup
-├── docker-compose.yml       # Kafka, Zookeeper, Elasticsearch, Kibana
-├── kibana_dashboard.ndjson  # Exportable Kibana saved objects backup
-├── requirements.txt         # Python dependencies
+├── binance_to_kafka.py           # WebSocket producer → Kafka topic
+├── spark_streaming.py            # Streaming analytics + anomaly detection
+├── setup_kibana.py               # Programmatic Kibana setup helper
+├── create_es_index.ps1           # Elasticsearch index mapping bootstrap
+├── docker-compose.yml            # Kafka/Zookeeper/Elasticsearch/Kibana stack
+├── kibana_dashboard.ndjson       # Exported Kibana dashboard objects
+├── requirements.txt              # Python dependencies
 ├── docs/
-│   ├── PERSISTENCE_RUNBOOK.md  # Restart-after-reboot guide
-│   ├── runbook.txt             # Quick operational reference
-│   ├── kibana_setup.md         # Kibana dashboard setup instructions
-│   ├── PROJECT_EXPLANATION.md  # Project explanation and glossary
-│   ├── technical_report.md     # Technical architecture report
-│   └── PRESENTATION_GUIDE.md   # Presentation/demo walkthrough
-└── .gitignore
+│   ├── PERSISTENCE_RUNBOOK.md
+│   ├── PRESENTATION_GUIDE.md
+│   ├── PROJECT_EXPLANATION.md
+│   ├── kibana_setup.md
+│   ├── runbook.txt
+│   └── technical_report.md
+├── .gitignore
+└── LICENSE
 ```
 
-## Key Metrics
+## Limitations
 
-| Metric | Formula | Purpose |
-|--------|---------|---------|
-| **VWAP** | $\sum(price \times qty) / \sum(qty)$ | Volume-weighted average price per window |
-| **Z-Score** | $(VWAP - \mu) / \sigma$ | Deviation from mean — anomaly when \|Z\| > 2.0 |
+- Current setup is optimized for local single-node execution (not production cluster mode).
+- Elasticsearch security is disabled for local development convenience.
+- Pipeline currently tracks BTC/USDT only; no symbol multiplexing yet.
+- Unit tests are not yet implemented for stream transformations.
 
-## Shutdown
+## Roadmap
 
-```powershell
-# Stop producer & Spark: Ctrl+C in each terminal
-# Stop Docker services:
-docker compose down
-```
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| Spark crashes with "getSubject is not supported" | Set `$env:JAVA_HOME` to Java 17 (not 18+) |
-| Kafka container exits after `docker compose up` | `docker compose restart zookeeper; Start-Sleep -Seconds 10; docker compose restart kafka` |
-| No data in Elasticsearch | Ensure both producer and Spark are running; wait for the first closed window |
-| Spark checkpoint errors on restart | Delete `checkpoints/` folder and restart |
+1. Add automated tests for transformation and anomaly logic.
+2. Add configurable multi-symbol ingestion and topic partitioning.
+3. Add containerized Spark execution profile for easier reproducibility.
+4. Add alerting hooks (Slack/Email/Webhook) for anomaly events.
+5. Add benchmark section (latency, throughput, and failure-recovery behavior).
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+Licensed under MIT. See [`LICENSE`](./LICENSE).
